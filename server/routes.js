@@ -100,7 +100,7 @@ module.exports = function createRouter({ ip }) {
     res.json({ me: mePayload(req.user) });
   });
 
-  // ---------- вход через Яндекс (опционально) ----------
+  // ---------- вход через Яндекс ----------
 
   // Переадресующая страница на GitHub Pages: фиксированный HTTPS-адрес без
   // IP/порта, поэтому Redirect URI в кабинете Яндекса регистрируется один раз
@@ -112,6 +112,10 @@ module.exports = function createRouter({ ip }) {
 
   function yandexCallbackUrl(req) {
     return `${req.protocol}://${req.get("host")}/api/auth/yandex/callback`;
+  }
+
+  function sha256Base64Url(s) {
+    return require("crypto").createHash("sha256").update(s).digest("base64url");
   }
 
   /** Свободный логин на базе яндекс-логина: при занятости — автосуффикс. */
@@ -128,15 +132,17 @@ module.exports = function createRouter({ ip }) {
     return candidate;
   }
 
-  // Старт OAuth: редирект на Яндекс. Адрес колбэка зашиваем в state,
-  // случайную часть запоминаем в сессии (защита от CSRF).
+  // Старт OAuth: редирект на Яндекс. PKCE: verifier запоминаем в сессии,
+  // challenge уходит в запрос; секрет приложения не используется вообще
+  // (публичный клиент) — поэтому вход работает из коробки у всех установок.
   router.get("/api/auth/yandex", (req, res) => {
     if (!config.yandexClientId) {
       return res.status(404).json({ error: "Вход через Яндекс не настроен" });
     }
     const rand = config.randomString(16);
     const cb = yandexCallbackUrl(req);
-    req.session.yandexAuth = { rand, cb };
+    const verifier = config.randomString(64);
+    req.session.yandexAuth = { rand, cb, verifier };
     const state = rand + "~" + Buffer.from(cb, "utf8").toString("base64url");
     const params = new URLSearchParams({
       response_type: "code",
@@ -145,18 +151,20 @@ module.exports = function createRouter({ ip }) {
       state,
       scope: "login:info",
       force_confirm: "yes",
+      code_challenge: sha256Base64Url(verifier),
+      code_challenge_method: "S256",
     });
     res.redirect("https://oauth.yandex.ru/authorize?" + params.toString());
   });
 
-  // Колбэк от Яндекса (после переадресующей страницы): обмен кода на токен,
-  // получение личности, вход/создание пользователя
+  // Колбэк от Яндекса (после переадресующей страницы): обмен кода на токен
+  // через PKCE-verifier, получение личности, вход/создание пользователя
   router.get("/api/auth/yandex/callback", async (req, res) => {
     const fail = (why) => {
       logger.log(`Яндекс-вход не удался: ${why}`);
       res.redirect("/?auth_error=yandex");
     };
-    if (!config.yandexClientId || !config.yandexClientSecret) return fail("не настроен");
+    if (!config.yandexClientId) return fail("не настроен");
     const { code, state, error } = req.query;
 
     // Проверка state: случайная часть и адрес возврата должны совпасть с сессией
@@ -183,7 +191,7 @@ module.exports = function createRouter({ ip }) {
           grant_type: "authorization_code",
           code: String(code),
           client_id: config.yandexClientId,
-          client_secret: config.yandexClientSecret,
+          code_verifier: expected.verifier,
         }),
       });
       if (!tokenRes.ok) return fail(`обмен кода: HTTP ${tokenRes.status}`);

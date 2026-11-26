@@ -50,9 +50,12 @@ module.exports = {
     envAdminPassword && !envAdminPassword.startsWith("change-me")
       ? envAdminPassword
       : null,
-  // Яндекс-вход (опционально). Без client_id кнопки нет — фича выключена.
-  yandexClientId: envOrNull(process.env.YANDEX_CLIENT_ID),
-  yandexClientSecret: envOrNull(process.env.YANDEX_CLIENT_SECRET),
+  // Яндекс-вход. Работает из коробки: публичный клиент (PKCE, без секрета),
+  // client_id зашит — это не секрет, он виден в любом OAuth-URL.
+  // Переопределить: YANDEX_CLIENT_ID в .env.
+  yandexClientId:
+    envOrNull(process.env.YANDEX_CLIENT_ID) ||
+    "50349bb28ee7428b8a8a2ec0243eb91f",
   root,
   envPath,
   dataDir: path.join(root, "data"),
