@@ -44,10 +44,27 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_history_user_ts ON location_history(user_id, ts);
 `);
 
+// Миграция: колонка yandex_id для входа через Яндекс (несколько NULL — ок,
+// поэтому уникальность через частичный индекс)
+{
+  const cols = db.pragma("table_info(users)");
+  if (!cols.some((c) => c.name === "yandex_id")) {
+    db.exec("ALTER TABLE users ADD COLUMN yandex_id TEXT");
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_yandex ON users(yandex_id) WHERE yandex_id IS NOT NULL"
+    );
+    logger.log("Миграция БД: добавлена колонка yandex_id.");
+  }
+}
+
 const q = {
   insertUser: db.prepare(
     "INSERT INTO users (login, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)"
   ),
+  insertYandexUser: db.prepare(
+    "INSERT INTO users (login, password_hash, yandex_id, created_at) VALUES (?, ?, ?, ?)"
+  ),
+  userByYandexId: db.prepare("SELECT * FROM users WHERE yandex_id = ?"),
   userByLogin: db.prepare("SELECT * FROM users WHERE login = ?"),
   userById: db.prepare("SELECT * FROM users WHERE id = ?"),
   updateLocation: db.prepare(
@@ -99,6 +116,17 @@ function createUser(login, password, isAdmin = false) {
   const hash = bcrypt.hashSync(password, 10);
   const res = q.insertUser.run(login, hash, isAdmin ? 1 : 0, Date.now());
   return getUserById(res.lastInsertRowid);
+}
+
+/** Пользователь, созданный через Яндекс-вход: пароль случайный (не используется). */
+function createYandexUser(login, yandexId) {
+  const hash = bcrypt.hashSync(config.randomString(24), 10);
+  const res = q.insertYandexUser.run(login, hash, String(yandexId), Date.now());
+  return getUserById(res.lastInsertRowid);
+}
+
+function findUserByYandexId(yandexId) {
+  return q.userByYandexId.get(String(yandexId));
 }
 
 function findUserByLogin(login) {
@@ -224,6 +252,8 @@ setInterval(cleanup, 3600 * 1000).unref();
 module.exports = {
   db,
   createUser,
+  createYandexUser,
+  findUserByYandexId,
   findUserByLogin,
   getUserById,
   verifyPassword,

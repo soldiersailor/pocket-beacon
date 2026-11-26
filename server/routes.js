@@ -50,7 +50,7 @@ module.exports = function createRouter({ ip }) {
   router.get("/api/server-info", async (req, res) => {
     try {
       const qr = await QRCode.toDataURL(serverUrl, { width: 512, margin: 1 });
-      res.json({ url: serverUrl, qr });
+      res.json({ url: serverUrl, qr, yandexEnabled: !!config.yandexClientId });
     } catch {
       res.status(500).json({ error: "Не удалось сгенерировать QR-код" });
     }
@@ -98,6 +98,99 @@ module.exports = function createRouter({ ip }) {
 
   router.get("/api/me", requireAuth, (req, res) => {
     res.json({ me: mePayload(req.user) });
+  });
+
+  // ---------- вход через Яндекс (опционально) ----------
+
+  function yandexCallbackUrl(req) {
+    return `${req.protocol}://${req.get("host")}/api/auth/yandex/callback`;
+  }
+
+  /** Свободный логин на базе яндекс-логина: при занятости — автосуффикс. */
+  function freeYandexLogin(raw) {
+    let base = String(raw || "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}_.-]/gu, "")
+      .slice(0, 20);
+    if (base.length < 2) base = "user";
+    let candidate = base;
+    for (let n = 1; db.findUserByLogin(candidate); n++) {
+      candidate = n === 1 ? `${base}.ya` : `${base}.ya${n + 1}`;
+    }
+    return candidate;
+  }
+
+  // Старт OAuth: редирект на Яндекс с защитой state (CSRF)
+  router.get("/api/auth/yandex", (req, res) => {
+    if (!config.yandexClientId) {
+      return res.status(404).json({ error: "Вход через Яндекс не настроен" });
+    }
+    const state = config.randomString(16);
+    req.session.yandexState = state;
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: config.yandexClientId,
+      redirect_uri: yandexCallbackUrl(req),
+      state,
+      scope: "login:info",
+      force_confirm: "yes",
+    });
+    res.redirect("https://oauth.yandex.ru/authorize?" + params.toString());
+  });
+
+  // Колбэк от Яндекса: обмен кода на токен, получение личности, вход/создание
+  router.get("/api/auth/yandex/callback", async (req, res) => {
+    const fail = (why) => {
+      logger.log(`Яндекс-вход не удался: ${why}`);
+      res.redirect("/?auth_error=yandex");
+    };
+    if (!config.yandexClientId || !config.yandexClientSecret) return fail("не настроен");
+    const { code, state, error } = req.query;
+    if (error) return fail(String(error));
+    if (!code || !state || state !== req.session.yandexState) return fail("state");
+    delete req.session.yandexState;
+
+    try {
+      const tokenRes = await fetch("https://oauth.yandex.ru/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code: String(code),
+          client_id: config.yandexClientId,
+          client_secret: config.yandexClientSecret,
+        }),
+      });
+      if (!tokenRes.ok) return fail(`обмен кода: HTTP ${tokenRes.status}`);
+      const { access_token } = await tokenRes.json();
+      if (!access_token) return fail("нет токена");
+
+      const infoRes = await fetch("https://login.yandex.ru/info?format=json", {
+        headers: { Authorization: `OAuth ${access_token}` },
+      });
+      if (!infoRes.ok) return fail(`личность: HTTP ${infoRes.status}`);
+      const info = await infoRes.json();
+      if (!info || !info.id) return fail("нет id");
+
+      let user = db.findUserByYandexId(info.id);
+      if (!user) {
+        const login = freeYandexLogin(
+          info.login || (info.default_email || "").split("@")[0] || `user${info.id}`
+        );
+        user = db.createYandexUser(login, info.id);
+        logger.log(`Создан пользователь «${login}» через Яндекс (id ${info.id})`);
+      }
+      if (user.is_banned) {
+        req.session.destroy(() => {});
+        return res.redirect("/?auth_error=banned");
+      }
+      req.session.userId = user.id;
+      logger.log(`Вход через Яндекс: ${user.login}`);
+      res.redirect("/");
+    } catch (err) {
+      logger.error("Яндекс-вход, ошибка:", err);
+      res.redirect("/?auth_error=yandex");
+    }
   });
 
   // ---------- геолокация ----------

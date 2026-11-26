@@ -299,6 +299,7 @@ const App = (() => {
     $("form-auth").onsubmit = onAuthSubmit;
     $("chk-observer").checked = observer;
     $("chk-observer").onchange = (e) => setObserver(e.target.checked);
+    $("btn-yandex").onclick = () => { location.href = "/api/auth/yandex"; };
 
     $("btn-logout").onclick = async () => {
       try { await api.post("/api/logout"); } catch { /* не страшно */ }
@@ -314,8 +315,26 @@ const App = (() => {
     $("admin-close").onclick = () => $("admin-panel").classList.add("hidden");
   }
 
+  function showAuthErrorFromUrl() {
+    const err = new URLSearchParams(location.search).get("auth_error");
+    if (!err) return;
+    history.replaceState(null, "", location.pathname);
+    if (err === "banned") {
+      $("auth-error").textContent = "Аккаунт заблокирован.";
+    } else if (err === "yandex") {
+      $("auth-error").textContent =
+        "Вход через Яндекс не удался. Попробуйте ещё раз или войдите с логином и паролем.";
+    }
+  }
+
   async function boot() {
     bindEvents();
+    showAuthErrorFromUrl();
+    // Кнопка Яндекс-входа — только если сервер его настроил
+    try {
+      const info = await api.get("/api/server-info");
+      if (info.yandexEnabled) $("btn-yandex").classList.remove("hidden");
+    } catch { /* сервер недоступен — покажется форма входа */ }
     try {
       const { me: m } = await api.get("/api/me");
       startApp(m);

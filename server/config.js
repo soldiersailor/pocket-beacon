@@ -39,6 +39,7 @@ ensureSessionSecret();
 // Пароль админа из .env — необязательная опция для первого запуска.
 // Заглушки и пустые значения игнорируем.
 const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
+const envOrNull = (v) => (v && v.trim() ? v.trim() : null);
 
 module.exports = {
   port: parseInt(process.env.PORT || "3443", 10),
@@ -49,6 +50,9 @@ module.exports = {
     envAdminPassword && !envAdminPassword.startsWith("change-me")
       ? envAdminPassword
       : null,
+  // Яндекс-вход (опционально). Без client_id кнопки нет — фича выключена.
+  yandexClientId: envOrNull(process.env.YANDEX_CLIENT_ID),
+  yandexClientSecret: envOrNull(process.env.YANDEX_CLIENT_SECRET),
   root,
   envPath,
   dataDir: path.join(root, "data"),
