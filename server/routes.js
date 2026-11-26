@@ -102,6 +102,14 @@ module.exports = function createRouter({ ip }) {
 
   // ---------- вход через Яндекс (опционально) ----------
 
+  // Переадресующая страница на GitHub Pages: фиксированный HTTPS-адрес без
+  // IP/порта, поэтому Redirect URI в кабинете Яндекса регистрируется один раз
+  // навсегда. Реальный адрес сервера путешествует внутри state (base64url) и
+  // валидируется по сессии при возврате.
+  const YANDEX_RELAY_URL =
+    process.env.YANDEX_RELAY_URL ||
+    "https://soldiersailor.github.io/pocket-beacon/oauth.html";
+
   function yandexCallbackUrl(req) {
     return `${req.protocol}://${req.get("host")}/api/auth/yandex/callback`;
   }
@@ -120,17 +128,20 @@ module.exports = function createRouter({ ip }) {
     return candidate;
   }
 
-  // Старт OAuth: редирект на Яндекс с защитой state (CSRF)
+  // Старт OAuth: редирект на Яндекс. Адрес колбэка зашиваем в state,
+  // случайную часть запоминаем в сессии (защита от CSRF).
   router.get("/api/auth/yandex", (req, res) => {
     if (!config.yandexClientId) {
       return res.status(404).json({ error: "Вход через Яндекс не настроен" });
     }
-    const state = config.randomString(16);
-    req.session.yandexState = state;
+    const rand = config.randomString(16);
+    const cb = yandexCallbackUrl(req);
+    req.session.yandexAuth = { rand, cb };
+    const state = rand + "~" + Buffer.from(cb, "utf8").toString("base64url");
     const params = new URLSearchParams({
       response_type: "code",
       client_id: config.yandexClientId,
-      redirect_uri: yandexCallbackUrl(req),
+      redirect_uri: YANDEX_RELAY_URL,
       state,
       scope: "login:info",
       force_confirm: "yes",
@@ -138,7 +149,8 @@ module.exports = function createRouter({ ip }) {
     res.redirect("https://oauth.yandex.ru/authorize?" + params.toString());
   });
 
-  // Колбэк от Яндекса: обмен кода на токен, получение личности, вход/создание
+  // Колбэк от Яндекса (после переадресующей страницы): обмен кода на токен,
+  // получение личности, вход/создание пользователя
   router.get("/api/auth/yandex/callback", async (req, res) => {
     const fail = (why) => {
       logger.log(`Яндекс-вход не удался: ${why}`);
@@ -146,9 +158,22 @@ module.exports = function createRouter({ ip }) {
     };
     if (!config.yandexClientId || !config.yandexClientSecret) return fail("не настроен");
     const { code, state, error } = req.query;
+
+    // Проверка state: случайная часть и адрес возврата должны совпасть с сессией
+    const expected = req.session.yandexAuth;
+    delete req.session.yandexAuth;
+    const parts = String(state || "").split("~");
+    let cb = null;
+    if (parts.length === 2) {
+      try {
+        cb = Buffer.from(parts[1], "base64url").toString("utf8");
+      } catch { /* невалидный base64 */ }
+    }
+    if (!expected || parts[0] !== expected.rand || !cb || cb !== expected.cb) {
+      return fail("state");
+    }
     if (error) return fail(String(error));
-    if (!code || !state || state !== req.session.yandexState) return fail("state");
-    delete req.session.yandexState;
+    if (!code) return fail("нет кода");
 
     try {
       const tokenRes = await fetch("https://oauth.yandex.ru/token", {

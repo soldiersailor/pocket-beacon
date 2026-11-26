@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pocket Beacon — вход через Яндекс</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #0f1720; color: #e8eef5; margin: 0;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="msg">Перенаправляем обратно в приложение…</div>
+  <script>
+    // Переадресующая страница для Яндекс OAuth (GitHub Pages).
+    // Яндекс приводит сюда браузер с ?code=...&state=...; внутри state лежит
+    // адрес колбэка конкретного сервера Pocket Beacon — отправляем туда.
+    (function () {
+      function fail() {
+        document.getElementById("msg").textContent =
+          "Не удалось вернуться в приложение. Закройте эту вкладку и повторите вход.";
+      }
+
+      var q = new URLSearchParams(location.search);
+      var state = q.get("state") || "";
+      var idx = state.indexOf("~");
+      if (idx < 0) return fail();
+
+      var target;
+      try {
+        var b64 = state.slice(idx + 1).replace(/-/g, "+").replace(/_/g, "/");
+        target = decodeURIComponent(escape(atob(b64)));
+      } catch (e) {
+        return fail();
+      }
+
+      // Строгая проверка: только https и строго наш путь колбэка
+      if (target.indexOf("https://") !== 0 ||
+          target.indexOf("/api/auth/yandex/callback") < 0) {
+        return fail();
+      }
+
+      var u = new URL(target);
+      ["code", "state", "error"].forEach(function (k) {
+        var v = q.get(k);
+        if (v) u.searchParams.set(k, v);
+      });
+      location.replace(u.toString());
+    })();
+  </script>
+</body>
+</html>
