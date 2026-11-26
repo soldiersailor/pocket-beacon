@@ -1,0 +1,32 @@
+{
+  "name": "pocket-beacon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Локальное веб-приложение для обмена геолокацией в Wi-Fi сети",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "dev:http": "node --watch server/dev-http.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@peculiar/x509": "^3.1.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.2.0",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
+    "express-session": "^1.19.0",
+    "leaflet": "^1.9.4",
+    "qrcode": "^1.5.4",
+    "reflect-metadata": "^0.2.2",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  }
+}
