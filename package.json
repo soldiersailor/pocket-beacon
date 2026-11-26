@@ -1,6 +1,6 @@
 {
   "name": "pocket-beacon",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Локальное веб-приложение для обмена геолокацией в Wi-Fi сети",
   "main": "server/index.js",
