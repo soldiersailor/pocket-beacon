@@ -53,6 +53,13 @@ function broadcastUsers() {
   }, 300);
 }
 
+/** Отправляет событие всем сокетам конкретного пользователя. */
+function sendToUser(userId, event, data) {
+  const set = userSockets.get(userId);
+  if (!set) return;
+  for (const socket of set) socket.emit(event, data);
+}
+
 /** Отключает все сокеты пользователя, отправив событие (banned / force:logout). */
 function kickUser(userId, event) {
   const set = userSockets.get(userId);
@@ -103,4 +110,4 @@ function init(ioInstance, sessionMiddleware) {
   });
 }
 
-module.exports = { init, broadcastUsers, kickUser, getOnlineUserIds };
+module.exports = { init, broadcastUsers, kickUser, sendToUser, getOnlineUserIds };

@@ -111,6 +111,10 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
+  /* отступы под Dynamic Island / чёлку / скругления iPhone */
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  padding-left: calc(12px + env(safe-area-inset-left, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
   background: var(--panel);
   z-index: 20;
 }
@@ -129,6 +133,9 @@ html, body {
   z-index: 1010; /* выше панелей Leaflet (z-index до 1000) */
   overflow-y: auto;
   padding: 12px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   transition: transform 0.2s ease;
 }
 #sidebar h2 { font-size: 0.85em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
@@ -153,8 +160,8 @@ html, body {
 
 #btn-locate {
   position: absolute;
-  right: 14px;
-  bottom: 20px;
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: 1010;
   width: 44px; height: 44px;
   border-radius: 50%;
@@ -180,7 +187,8 @@ html, body {
 
 .toast {
   position: absolute;
-  bottom: 24px; left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
   transform: translateX(-50%);
   z-index: 1020;
   background: var(--panel-2);
@@ -214,6 +222,8 @@ html, body {
   justify-content: center;
   z-index: 2000; /* выше всего, включая контролы Leaflet */
   padding: 16px;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 .overlay-card {
   background: var(--panel);

@@ -227,6 +227,7 @@ module.exports = function createRouter({ ip }) {
       return res.status(400).json({ error: "Нельзя снять права с последнего администратора" });
     }
     db.setAdmin(target.id, makeAdmin);
+    sockets.sendToUser(target.id, "admin:changed", { isAdmin: makeAdmin });
     logger.log(`Админ ${req.user.login} ${makeAdmin ? "дал права админа" : "снял права админа"}: ${target.login}`);
     res.json({ ok: true });
   });

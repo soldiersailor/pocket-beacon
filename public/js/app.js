@@ -125,6 +125,12 @@ const App = (() => {
       socket.disconnect();
       $("banned-overlay").classList.remove("hidden");
     });
+    socket.on("admin:changed", (data) => {
+      me.isAdmin = !!(data && data.isAdmin);
+      $("btn-admin").classList.toggle("hidden", !me.isAdmin);
+      if (!me.isAdmin) $("admin-panel").classList.add("hidden");
+      toast(me.isAdmin ? "Вы назначены администратором" : "Права администратора сняты");
+    });
     socket.on("force:logout", () => {
       socket.disconnect();
       location.reload();
@@ -299,6 +305,7 @@ const App = (() => {
       location.reload();
     };
     $("btn-visibility").onclick = toggleVisibility;
+    $("btn-qr").onclick = () => window.open("/qr", "_blank", "noopener");
     $("btn-enable-geo").onclick = () => setObserver(false);
     $("btn-continue-no-geo").onclick = () => setObserver(true);
     $("btn-locate").onclick = () => MapModule.recenter();
