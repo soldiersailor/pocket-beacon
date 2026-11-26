@@ -4,13 +4,17 @@ node_modules/
 # Портативный Node.js (скачивается start.bat)
 .runtime/
 
+# Сборка установщика
+build/
+
+# Логи
+logs/
+*.log
+
 # Данные и секреты
 .env
 data/
 certs/
-
-# Логи
-*.log
 
 # ОС
 .DS_Store

@@ -5,6 +5,7 @@ const { Server } = require("socket.io");
 
 const config = require("./config");
 const db = require("./db");
+const logger = require("./logger");
 const SqliteSessionStore = require("./store");
 const createRouter = require("./routes");
 const sockets = require("./sockets");
@@ -42,6 +43,13 @@ function createApp({ ip, secureCookies = true }) {
   app.use("/vendor/leaflet", express.static(leafletDist));
   app.use(express.static(config.publicDir, { extensions: ["html"] }));
   app.use(createRouter({ ip }));
+
+  // Ошибки — в лог, клиенту — нейтральный 500
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    logger.error(`HTTP ${req.method} ${req.url}:`, err);
+    res.status(500).json({ error: "Внутренняя ошибка сервера" });
+  });
 
   function attach(server) {
     const io = new Server(server);

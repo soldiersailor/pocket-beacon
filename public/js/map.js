@@ -164,31 +164,41 @@ const MapModule = (() => {
       hiddenUl.appendChild(emptyItem("Нет скрытых пользователей"));
     }
     for (const u of others) {
-      const li = document.createElement("li");
-      const dot = document.createElement("span");
-      dot.className = "dot hidden-dot";
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = u.login;
-      const badge = document.createElement("span");
-      badge.className = "age";
-      badge.textContent = "скрыт";
-      li.append(dot, name, badge);
-      hiddenUl.appendChild(li);
+      hiddenUl.appendChild(flagItem(u.login, "скрыт"));
     }
     if (selfHidden) {
-      const li = document.createElement("li");
-      const dot = document.createElement("span");
-      dot.className = "dot hidden-dot";
-      const name = document.createElement("span");
-      name.className = "name";
-      name.textContent = me.login + " (вы)";
-      const badge = document.createElement("span");
-      badge.className = "age";
-      badge.textContent = "скрыт";
-      li.append(dot, name, badge);
-      hiddenUl.appendChild(li);
+      hiddenUl.appendChild(flagItem(me.login + " (вы)", "скрыт"));
     }
+
+    // Наблюдатели: онлайн без координат
+    const observersUl = document.getElementById("list-observers");
+    observersUl.textContent = "";
+    const observers = payload.observers || [];
+    const otherObservers = observers.filter((u) => !me || u.id !== me.id);
+    const selfObserver = me && observers.some((u) => u.id === me.id);
+    if (!otherObservers.length && !selfObserver) {
+      observersUl.appendChild(emptyItem("Нет наблюдателей"));
+    }
+    for (const u of otherObservers) {
+      observersUl.appendChild(flagItem(u.login, "наблюдатель"));
+    }
+    if (selfObserver) {
+      observersUl.appendChild(flagItem(me.login + " (вы)", "наблюдатель"));
+    }
+  }
+
+  function flagItem(name, flagText) {
+    const li = document.createElement("li");
+    const dot = document.createElement("span");
+    dot.className = "dot hidden-dot";
+    const nameEl = document.createElement("span");
+    nameEl.className = "name";
+    nameEl.textContent = name;
+    const badge = document.createElement("span");
+    badge.className = "age";
+    badge.textContent = flagText;
+    li.append(dot, nameEl, badge);
+    return li;
   }
 
   function emptyItem(text) {

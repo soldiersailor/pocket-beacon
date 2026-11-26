@@ -3,6 +3,7 @@ const path = require("path");
 const Database = require("better-sqlite3");
 const bcrypt = require("bcryptjs");
 const config = require("./config");
+const logger = require("./logger");
 const { haversineM } = require("./geo");
 
 fs.mkdirSync(config.dataDir, { recursive: true });
@@ -70,6 +71,10 @@ const q = {
   listHidden: db.prepare(
     "SELECT id, login FROM users WHERE is_banned = 0 AND is_hidden = 1"
   ),
+  listNoLocation: db.prepare(
+    "SELECT id, login FROM users WHERE is_banned = 0 AND is_hidden = 0 AND lat IS NULL"
+  ),
+  setPassword: db.prepare("UPDATE users SET password_hash = ? WHERE id = ?"),
   listAll: db.prepare(`
     SELECT id, login, is_admin, is_banned, is_hidden, location_updated_at, created_at
     FROM users ORDER BY login
@@ -148,6 +153,14 @@ function setAdmin(userId, isAdmin) {
   q.setAdmin.run(isAdmin ? 1 : 0, userId);
 }
 
+function setPassword(userId, password) {
+  q.setPassword.run(bcrypt.hashSync(password, 10), userId);
+}
+
+function clearLocation(userId) {
+  q.clearLocation.run(userId);
+}
+
 function deleteUser(userId) {
   q.deleteUser.run(userId); // история удалится каскадно
 }
@@ -166,6 +179,11 @@ function listHidden() {
   return q.listHidden.all();
 }
 
+/** Пользователи без координат (наблюдатели и те, кто ещё не получил GPS-фикс). */
+function listNoLocation() {
+  return q.listNoLocation.all();
+}
+
 function listAll() {
   return q.listAll.all();
 }
@@ -179,11 +197,18 @@ function deleteSessionsForUser(userId) {
 function seedAdmin() {
   const existing = findUserByLogin(config.adminLogin);
   if (!existing) {
-    createUser(config.adminLogin, config.adminPassword, true);
-    console.log(`Создан администратор «${config.adminLogin}».`);
+    // Пароль: из .env (если задан явно) или стандартный «admin».
+    // При запуске сервер предложит сменить стандартный пароль (index.js).
+    const password = config.adminInitialPassword || "admin";
+    createUser(config.adminLogin, password, true);
+    if (config.adminInitialPassword) {
+      logger.log(`Создан администратор «${config.adminLogin}» (пароль из .env).`);
+    } else {
+      logger.log(`Создан администратор «${config.adminLogin}» со стандартным паролем.`);
+    }
   } else if (!existing.is_admin) {
     setAdmin(existing.id, true);
-    console.log(`Пользователь «${config.adminLogin}» назначен администратором.`);
+    logger.log(`Пользователь «${config.adminLogin}» назначен администратором.`);
   }
 }
 
@@ -208,10 +233,13 @@ module.exports = {
   setHidden,
   setBanned,
   setAdmin,
+  setPassword,
+  clearLocation,
   deleteUser,
   countActiveAdmins,
   listVisible,
   listHidden,
+  listNoLocation,
   listAll,
   deleteSessionsForUser,
 };

@@ -18,7 +18,13 @@ function removeSocket(userId, socket) {
   if (!set.size) userSockets.delete(userId);
 }
 
+/** id пользователей с живым сокетом (онлайн). */
+function getOnlineUserIds() {
+  return [...userSockets.keys()];
+}
+
 function buildUsersPayload() {
+  const online = new Set(getOnlineUserIds());
   return {
     serverTime: Date.now(),
     visible: db.listVisible().map((u) => ({
@@ -30,6 +36,10 @@ function buildUsersPayload() {
       updatedAt: u.location_updated_at,
     })),
     hidden: db.listHidden().map((u) => ({ id: u.id, login: u.login })),
+    // онлайн без координат: наблюдатели и те, кто ещё не получил GPS-фикс
+    observers: db.listNoLocation()
+      .filter((u) => online.has(u.id))
+      .map((u) => ({ id: u.id, login: u.login })),
   };
 }
 
@@ -70,6 +80,7 @@ function init(ioInstance, sessionMiddleware) {
       return socket.disconnect(true);
     }
     addSocket(userId, socket);
+    broadcastUsers(); // наблюдатель появился онлайн
 
     socket.emit("users:update", buildUsersPayload());
 
@@ -85,8 +96,11 @@ function init(ioInstance, sessionMiddleware) {
       broadcastUsers();
     });
 
-    socket.on("disconnect", () => removeSocket(userId, socket));
+    socket.on("disconnect", () => {
+      removeSocket(userId, socket);
+      broadcastUsers(); // наблюдатель ушёл офлайн
+    });
   });
 }
 
-module.exports = { init, broadcastUsers, kickUser };
+module.exports = { init, broadcastUsers, kickUser, getOnlineUserIds };

@@ -1,13 +1,15 @@
 {
   "name": "pocket-beacon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Локальное веб-приложение для обмена геолокацией в Wi-Fi сети",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "dev:http": "node --watch server/dev-http.js"
+    "dev:http": "node --watch server/dev-http.js",
+    "reset-admin": "node scripts/reset-admin.js",
+    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1"
   },
   "engines": {
     "node": ">=20"

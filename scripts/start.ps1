@@ -1,6 +1,6 @@
 ﻿# Pocket Beacon — установка и запуск одним файлом.
 # Если Node.js не установлен — скачивает портативный в .runtime\ (в систему ничего не ставит).
-# Затем: npm install -> создание .env со случайными секретами -> запуск сервера.
+# Затем: npm install -> запуск сервера (.env и пароль админа сервер создаст сам).
 
 $ErrorActionPreference = "Stop"
 # На случай старых настроек PowerShell 5.1 — принудительно TLS 1.2 для скачивания
@@ -9,13 +9,6 @@ $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
 function Write-Step($msg) { Write-Host "`n=== $msg ===" -ForegroundColor Cyan }
-
-function New-RandomString($len) {
-    $chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    $bytes = New-Object byte[] $len
-    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
-}
 
 # ---------- 1. Node.js ----------
 
@@ -89,28 +82,7 @@ if (-not (Test-Deps)) {
     }
 }
 
-# ---------- 3. .env ----------
-
-if (-not (Test-Path "$root\.env")) {
-    Write-Step "Создаю .env со случайными секретами"
-    $secret = New-RandomString 48
-    $adminPassword = New-RandomString 12
-    @"
-PORT=3443
-HOST_IP=
-SESSION_SECRET=$secret
-ADMIN_LOGIN=admin
-ADMIN_PASSWORD=$adminPassword
-"@ | Out-File -Encoding ascii "$root\.env"
-    Write-Host ""
-    Write-Host "  Логин администратора:  admin" -ForegroundColor Green
-    Write-Host "  Пароль администратора: $adminPassword" -ForegroundColor Green
-    Write-Host "  (сохранён в .env, поменяйте при желании и перезапустите)" -ForegroundColor Green
-} elseif ((Get-Content "$root\.env" -Raw) -match "change-me") {
-    Write-Host "ВНИМАНИЕ: в .env остались значения-заглушки (change-me). Замените их!" -ForegroundColor Yellow
-}
-
-# ---------- 4. Запуск ----------
+# ---------- 3. Запуск ----------
 
 Write-Step "Запускаю Pocket Beacon (остановка — Ctrl+C)"
 & $nodeExe "$root\server\index.js"

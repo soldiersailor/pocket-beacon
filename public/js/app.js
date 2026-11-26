@@ -3,6 +3,8 @@ const App = (() => {
   let me = null;
   let socket = null;
   let hidden = false;
+  let observer = localStorage.getItem("pb_observer") === "1";
+  let geoStarted = false;
   let lastSent = null; // { lat, lon, t }
   let toastTimer = null;
 
@@ -73,8 +75,45 @@ const App = (() => {
 
     MapModule.init(m);
     connectSocket();
-    startGeo();
+    applyObserverUI();
+    if (!observer) startGeo();
     updateVisibilityButton();
+  }
+
+  // ---------- режим наблюдателя ----------
+
+  function applyObserverUI() {
+    $("observer-badge").classList.toggle("hidden", !observer);
+    $("btn-enable-geo").classList.toggle("hidden", !observer);
+    $("btn-visibility").classList.toggle("hidden", observer);
+  }
+
+  function setObserver(value) {
+    observer = value;
+    localStorage.setItem("pb_observer", value ? "1" : "0");
+    applyObserverUI();
+    if (value) {
+      // стираем свои координаты на сервере — переходим в список наблюдателей
+      api.post("/api/location/clear").catch(() => {});
+      $("geo-denied").classList.add("hidden");
+      hideGeoStatus();
+    } else if (!geoStarted) {
+      startGeo();
+    }
+  }
+
+  function startGeo() {
+    if (geoStarted) return;
+    geoStarted = true;
+    if (!("geolocation" in navigator)) {
+      showGeoStatus("Геолокация не поддерживается браузером");
+      return;
+    }
+    navigator.geolocation.watchPosition(onPosition, onGeoError, {
+      enableHighAccuracy: false,
+      maximumAge: 5000,
+      timeout: 20000,
+    });
   }
 
   // ---------- сокет ----------
@@ -96,18 +135,6 @@ const App = (() => {
   }
 
   // ---------- геолокация ----------
-
-  function startGeo() {
-    if (!("geolocation" in navigator)) {
-      showGeoStatus("Геолокация не поддерживается браузером");
-      return;
-    }
-    navigator.geolocation.watchPosition(onPosition, onGeoError, {
-      enableHighAccuracy: false,
-      maximumAge: 5000,
-      timeout: 20000,
-    });
-  }
 
   function onPosition(pos) {
     const { latitude: lat, longitude: lon, accuracy } = pos.coords;
@@ -137,7 +164,7 @@ const App = (() => {
   function hideGeoStatus() { $("geo-status").classList.add("hidden"); }
 
   function maybeSend(lat, lon, accuracy) {
-    if (hidden) return;
+    if (hidden || observer) return;
     const now = Date.now();
     if (lastSent) {
       const dt = now - lastSent.t;
@@ -264,12 +291,16 @@ const App = (() => {
     $("tab-login").onclick = () => setAuthMode("login");
     $("tab-register").onclick = () => setAuthMode("register");
     $("form-auth").onsubmit = onAuthSubmit;
+    $("chk-observer").checked = observer;
+    $("chk-observer").onchange = (e) => setObserver(e.target.checked);
 
     $("btn-logout").onclick = async () => {
       try { await api.post("/api/logout"); } catch { /* не страшно */ }
       location.reload();
     };
     $("btn-visibility").onclick = toggleVisibility;
+    $("btn-enable-geo").onclick = () => setObserver(false);
+    $("btn-continue-no-geo").onclick = () => setObserver(true);
     $("btn-locate").onclick = () => MapModule.recenter();
     $("btn-users").onclick = () => $("sidebar").classList.toggle("open");
     $("btn-admin").onclick = openAdmin;

@@ -1,4 +1,5 @@
 const os = require("os");
+const net = require("net");
 
 // Подстроки в именах адаптеров, которые почти наверняка не являются LAN
 const VIRTUAL_HINTS = [
@@ -48,4 +49,41 @@ function getLanIp() {
   return candidates[0].ip;
 }
 
-module.exports = { getLanIp };
+/** Проверяет, свободен ли TCP-порт. */
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once("error", () => resolve(false));
+    srv.once("listening", () => srv.close(() => resolve(true)));
+    srv.listen(port, "0.0.0.0");
+  });
+}
+
+/**
+ * Порт считается свободным, только если его можно занять и на всех
+ * интерфейсах (0.0.0.0), и на loopback отдельно: Windows позволяет
+ * занять 0.0.0.0:P, когда кто-то уже держит 127.0.0.1:P, — и трафик
+ * с localhost уйдёт не нам.
+ */
+async function isPortReallyFree(port) {
+  return (await isPortFree(port)) && (await isPortFreeOn(port, "127.0.0.1"));
+}
+
+function isPortFreeOn(port, host) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once("error", () => resolve(false));
+    srv.once("listening", () => srv.close(() => resolve(true)));
+    srv.listen(port, host);
+  });
+}
+
+/** Ищет ближайший свободный порт начиная с startPort. */
+async function findFreePort(startPort, attempts = 50) {
+  for (let p = startPort; p < startPort + attempts; p++) {
+    if (await isPortReallyFree(p)) return p;
+  }
+  throw new Error("Не удалось найти свободный порт в диапазоне " + startPort + "–" + (startPort + attempts));
+}
+
+module.exports = { getLanIp, isPortFree: isPortReallyFree, findFreePort };

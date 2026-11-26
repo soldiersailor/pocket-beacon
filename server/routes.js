@@ -2,6 +2,7 @@ const express = require("express");
 const QRCode = require("qrcode");
 const db = require("./db");
 const config = require("./config");
+const logger = require("./logger");
 const { validateCoords } = require("./geo");
 const { requireAuth, requireAdmin, loginLimiter, registerLimiter } = require("./auth");
 const sockets = require("./sockets");
@@ -29,10 +30,14 @@ function visiblePayload() {
 }
 
 function usersPayload() {
+  const online = new Set(sockets.getOnlineUserIds());
   return {
     serverTime: Date.now(),
     visible: visiblePayload(),
     hidden: db.listHidden().map((u) => ({ id: u.id, login: u.login })),
+    observers: db.listNoLocation()
+      .filter((u) => online.has(u.id))
+      .map((u) => ({ id: u.id, login: u.login })),
   };
 }
 
@@ -68,6 +73,7 @@ module.exports = function createRouter({ ip }) {
     }
     const user = db.createUser(login, password);
     req.session.userId = user.id;
+    logger.log(`Регистрация: ${user.login}`);
     res.json({ me: mePayload(user) });
   });
 
@@ -75,12 +81,14 @@ module.exports = function createRouter({ ip }) {
     const { login, password } = req.body || {};
     const user = typeof login === "string" ? db.findUserByLogin(login) : null;
     if (!user || typeof password !== "string" || !db.verifyPassword(user, password)) {
+      logger.log(`Неудачный вход: ${typeof login === "string" ? login : "?"}`);
       return res.status(401).json({ error: "Неверный логин или пароль" });
     }
     if (user.is_banned) {
       return res.status(403).json({ error: "Аккаунт заблокирован", banned: true });
     }
     req.session.userId = user.id;
+    logger.log(`Вход: ${user.login}`);
     res.json({ me: mePayload(user) });
   });
 
@@ -116,6 +124,13 @@ module.exports = function createRouter({ ip }) {
     db.setHidden(req.user.id, hidden);
     sockets.broadcastUsers();
     res.json({ ok: true, hidden });
+  });
+
+  // Режим наблюдателя: стираем свои координаты, не трогая флаг скрытия
+  router.post("/api/location/clear", requireAuth, (req, res) => {
+    db.clearLocation(req.user.id);
+    sockets.broadcastUsers();
+    res.json({ ok: true });
   });
 
   router.get("/api/users", requireAuth, (req, res) => {
@@ -180,6 +195,7 @@ module.exports = function createRouter({ ip }) {
     db.deleteSessionsForUser(target.id);
     sockets.kickUser(target.id, "banned");
     sockets.broadcastUsers();
+    logger.log(`Админ ${req.user.login} забанил ${target.login}`);
     res.json({ ok: true });
   });
 
@@ -187,6 +203,7 @@ module.exports = function createRouter({ ip }) {
     const target = db.getUserById(parseInt(req.params.id, 10));
     if (!target) return res.status(404).json({ error: "Пользователь не найден" });
     db.setBanned(target.id, false);
+    logger.log(`Админ ${req.user.login} разбанил ${target.login}`);
     res.json({ ok: true });
   });
 
@@ -198,6 +215,7 @@ module.exports = function createRouter({ ip }) {
     db.deleteSessionsForUser(target.id);
     sockets.kickUser(target.id, "force:logout");
     sockets.broadcastUsers();
+    logger.log(`Админ ${req.user.login} удалил ${target.login}`);
     res.json({ ok: true });
   });
 
@@ -209,6 +227,7 @@ module.exports = function createRouter({ ip }) {
       return res.status(400).json({ error: "Нельзя снять права с последнего администратора" });
     }
     db.setAdmin(target.id, makeAdmin);
+    logger.log(`Админ ${req.user.login} ${makeAdmin ? "дал права админа" : "снял права админа"}: ${target.login}`);
     res.json({ ok: true });
   });
 

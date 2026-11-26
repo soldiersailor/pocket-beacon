@@ -88,6 +88,20 @@ html, body {
 .qr-link { color: var(--muted); text-align: center; font-size: 0.9em; }
 .qr-link:hover { color: var(--text); }
 
+.observer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.9em;
+  cursor: pointer;
+  user-select: none;
+}
+.observer-toggle input { accent-color: var(--accent); }
+
+.overlay-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
 /* ---------- Экран карты ---------- */
 
 #view-map { display: flex; flex-direction: column; height: 100vh; }

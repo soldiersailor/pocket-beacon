@@ -1,8 +1,9 @@
-require("reflect-metadata");
+﻿require("reflect-metadata");
 const fs = require("fs");
 const path = require("path");
 const { webcrypto } = require("crypto");
 const x509 = require("@peculiar/x509");
+const logger = require("./logger");
 
 const CERT_DAYS = 825; // максимум, который принимает iOS для сертификатов без CA
 const RENEW_MARGIN_MS = 7 * 24 * 3600 * 1000; // перевыпускать за неделю до истечения
@@ -71,13 +72,13 @@ async function ensureCerts(certsDir, ip) {
       if (meta.ip === ip && fresh) {
         return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
       }
-      console.log("IP сервера сменился или сертификат истекает — перевыпускаю.");
+      logger.log("IP сервера сменился или сертификат истекает — перевыпускаю.");
     } catch {
       // битая мета — просто перевыпустим
     }
   }
 
-  console.log(`Генерирую самоподписанный сертификат для IP ${ip}...`);
+  logger.log(`Генерирую самоподписанный сертификат для IP ${ip}...`);
   const { keyPem, certPem } = await generate(ip);
   fs.writeFileSync(keyPath, keyPem, { mode: 0o600 });
   fs.writeFileSync(certPath, certPem);

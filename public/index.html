@@ -23,6 +23,10 @@
         <input id="auth-password" type="password" placeholder="Пароль" autocomplete="current-password" required>
         <div id="auth-error" class="error"></div>
         <button type="submit" id="auth-submit" class="btn primary">Войти</button>
+        <label class="observer-toggle">
+          <input type="checkbox" id="chk-observer">
+          Режим наблюдателя (без геолокации)
+        </label>
       </form>
       <a class="qr-link" href="/qr" target="_blank" rel="noopener">QR-код для подключения с телефона</a>
     </div>
@@ -33,7 +37,9 @@
     <header id="topbar">
       <span class="brand">Pocket Beacon</span>
       <span id="me-login" class="me-login"></span>
+      <span id="observer-badge" class="badge accent hidden">наблюдатель</span>
       <div class="topbar-actions">
+        <button id="btn-enable-geo" class="btn hidden">Включить геолокацию</button>
         <button id="btn-visibility" class="btn">Скрыть меня</button>
         <button id="btn-users" class="btn mobile-only">Люди</button>
         <button id="btn-admin" class="btn hidden">Админ</button>
@@ -47,6 +53,8 @@
       <aside id="sidebar">
         <h2>На карте</h2>
         <ul id="list-visible" class="user-list"></ul>
+        <h2>Наблюдатели</h2>
+        <ul id="list-observers" class="user-list"></ul>
         <h2>Скрыты</h2>
         <ul id="list-hidden" class="user-list"></ul>
       </aside>
@@ -65,7 +73,10 @@
             <li>разрешите «Местоположение»;</li>
             <li>обновите страницу.</li>
           </ul>
-          <button class="btn primary" onclick="location.reload()">Обновить</button>
+          <div class="overlay-actions">
+            <button class="btn primary" onclick="location.reload()">Обновить</button>
+            <button class="btn" id="btn-continue-no-geo">Продолжить без геолокации</button>
+          </div>
         </div>
       </div>
 
